@@ -29,6 +29,7 @@
 #'
 #'
 #' data(xdat) #load example data frame
+#' xdat
 #' maketopoplot(dataset = xdat, condition = "difficulty", nrchans = 128)
 maketopoplot<-function(
     dataset=dat,
@@ -79,6 +80,7 @@ maketopoplot<-function(
 
   akimaversion = as.character(packageVersion("akima"))
   if(akimaversion !="0.6.2.1"){
+    warning("akima version 0.6.2.1 needed, but version ",akimaversion, "is provided. Defaulting to method 'biharmonic'.")
     method = "biharmonic"
   }
 
@@ -133,9 +135,9 @@ maketopoplot<-function(
     circledat2 <- circleFun(c(0.5, 0.5), 1.03, npoints = 10000) # center on [.5, .5] #white circle for fast plots (cut points away)
   }
 
+  # check electrode number
 
 
-  #Load electrode locations
   #Load electrode locations
   if (nrchans == 64){
     #electrodelocs<-read.delim("ElectrodeLocation64_fieldtrip.txt", header=F, sep=" ")
@@ -150,10 +152,13 @@ maketopoplot<-function(
       differenceplots=F}
     #now load and aggregate data
     electrodechanlist<-electrodelocs$channel
-    dat<-tidyr::pivot_longer(dataset, cols=matches(electrodechanlist), names_to="channel", values_to="signal") #convert to long format
+    chansincluded = names(dataset)[names(dataset)%in% electrodechanlist]
+    if(length(chansincluded) <64){
+      warning("number of electrodes provided in dataset matching the 64 extended 10-20 set layout is smaller than 64. Check whether the results make sense (or use different channel layout).")
+    }
+    dat<-tidyr::pivot_longer(dataset, cols=tidyr::matches(electrodechanlist), names_to="channel", values_to="signal") #convert to long format
   }
   if (nrchans == 128){
-
     electrodelocs<-Rtopos::electrodelocs128#read.delim("ElectrodeLocation128_fieldtrip.txt", header=F, sep=" ")
     electrodelocs[,c(1,5)]<-NULL
     names(electrodelocs)<-c("x", "y", "z","channel")
@@ -168,6 +173,10 @@ maketopoplot<-function(
 
     #now load and aggregate data
     electrodechanlist<-electrodelocs$channel
+    chansincluded = names(dataset)[names(dataset) %in% electrodechanlist]
+    if(length(chansincluded) <128){
+      warning("number of electrodes provided matching the 128 ABCD layout in dataset is smaller than 128. Check whether the results make sense (or use different channel layout).")
+    }
     dat<-tidyr::pivot_longer(dataset, cols=matches(electrodechanlist), names_to="channel", values_to="signal") #convert to long format
 
   }
@@ -299,7 +308,7 @@ maketopoplot<-function(
     }
 
     if(method =="biharmonic"){
-      datmat2 <-Rtopos:::biharmonic(dat,
+            datmat2 <-Rtopos:::biharmonic(dat,
                            grid_res = points2int)
     }
 
