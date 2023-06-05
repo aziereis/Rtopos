@@ -299,7 +299,7 @@ maketopoplot<-function(
     }
 
     if(method =="biharmonic"){
-      datmat2 <-biharmonic(dat,
+      datmat2 <-Rtopos:::biharmonic(dat,
                            grid_res = points2int)
     }
 
