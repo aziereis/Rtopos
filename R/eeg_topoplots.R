@@ -299,8 +299,6 @@ maketopoplot<-function(
     }
 
     if(method =="biharmonic"){
-      source("biharmonic.R")
-
       datmat2 <-biharmonic(dat,
                            grid_res = points2int)
     }
