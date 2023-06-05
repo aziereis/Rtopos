@@ -1,3 +1,4 @@
+#' @export
 biharmonic <- function(dataint,
                        grid_res = 100) {
 
