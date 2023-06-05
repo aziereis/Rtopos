@@ -8,7 +8,7 @@
 #' @param differencelevel specify a specific condition as the reference level. Defaults to "all" for all pairwise comparisons.
 #' @param extralegend plot legend extra (vs. under the label) to the figure. Defaults to TRUE.
 #' @param addlabels include the labels of the electrode channels. Defaults to FALSE.
-#' @param method one of "akima" or "biharmonic". Akima performs faster and includes a spline method but requires a specific version of the akima package (not newer than 0.6-2.1). Defaults to "akima".
+#' @param method one of "akima" ,"biharmonic" or "MBA". Akima performs faster and includes a spline method but requires a specific version of the akima package (not newer than 0.6-2.1). Defaults to "akima".
 #' @param simsignals Defaults to TRUE.
 #' @param quick faster plot with lower resolution. Defaults to TRUE.
 #' @param palette colour palette of the topoplot (e.g., BrBG, PiYG, PRGn, PuOr, RdBu, RdGy, RdYlBu, RdYlGn, Spectral). Defaults to "RdBu".
@@ -40,6 +40,7 @@ maketopoplot<-function(
     extralegend = T,
     addlabels=F,
     method = "akima",
+    forcemethod = F,
     simsignals=T,
     quick=T,
     palette = "RdBu",
@@ -74,14 +75,17 @@ maketopoplot<-function(
   # markchans = NULL
   # chanmarkcol = "black"
   # textsize = 10
-  # method = "akima"
+  # method = "MBA"
   # textfamily ="Arial"
   #load packages that are needed
 
   akimaversion = as.character(packageVersion("akima"))
-  if(akimaversion !="0.6.2.1"){
-    warning("akima version 0.6.2.1 needed, but version ",akimaversion, "is provided. Defaulting to method 'biharmonic'.")
+  if(method =="akima" & akimaversion !="0.6.2.1"){
+    warning("akima version 0.6.2.1 needed, but version ",akimaversion, " is provided. ")
+    if(!forcemethod){
+      warning("Defaulting to method 'biharmonic'.")
     method = "biharmonic"
+    }
   }
 
   limsignals = T
@@ -296,11 +300,20 @@ maketopoplot<-function(
       points2int<-500
     }
     #here the interpolation and extrapolation happens:
+    if(method =="MBA"){
+      warning("multivariate b-spline approximation has not been tested. Please check whether the results make sense.")
+      datmat <- MBA::mba.surf(dat[,c("x", "y", "signal")], points2int, points2int, extend=TRUE)$xyz.est
+      datmat2 <- data.frame(
+        do.call(expand.grid, lapply(dim(datmat$z), seq_len)),
+        value = as.vector(datmat$z)
+      )
+    }
     if(method =="akima"){
     datmat <- akima::interp(dat$x, dat$y, dat$signal,
                             xo = seq(0, 1, length = points2int),
                             yo = seq(0, 1, length = points2int),
                             extrap=TRUE, linear=FALSE, duplicate = "error")
+
     datmat2 <- data.frame(
       do.call(expand.grid, lapply(dim(datmat$z), seq_len)),
       value = as.vector(datmat$z)
@@ -395,11 +408,11 @@ maketopoplot<-function(
       {if (quick)ggplot2::geom_contour(colour = 'white', alpha = 0.5, size=0.3, breaks = whatsthat)}+
       {if (!quick)ggplot2::geom_contour(colour = 'white', alpha = 0.5, size=0.3, breaks = whatsthat)}+
 
-      {if (quick)ggplot2::geom_path(data = circledat2, ggplot2::aes(x, y, z = NULL), size=1.5, col="white") }+
-      {if (quick)ggplot2::geom_path(data = circledat3, ggplot2::aes(x, y, z = NULL), size=1.5, col="white") }+
-      {if (!quick)ggplot2::geom_path(data = circledat2, ggplot2::aes(x, y, z = NULL), size=2, col="white") }+
+      {if (quick)ggplot2::geom_path(data = circledat2, ggplot2::aes(x, y, z = NULL), linewidth=1.5, col="white") }+
+      {if (quick)ggplot2::geom_path(data = circledat3, ggplot2::aes(x, y, z = NULL), linewidth=1.5, col="white") }+
+      {if (!quick)ggplot2::geom_path(data = circledat2, ggplot2::aes(x, y, z = NULL), linewidth=2, col="white") }+
 
-      ggplot2::geom_path(data = circledat, ggplot2::aes(x, y, z = NULL), size=0.5) +
+      ggplot2::geom_path(data = circledat, ggplot2::aes(x, y, z = NULL), linewidth=0.5) +
       # draw the nose (haven't drawn ears yet)
       ggplot2::geom_line(data = data.frame(x = c(0.45, 0.5, 0.55), y = c(1.0, 1.05, 1.0)),
                          ggplot2::aes(x, y, z = NULL), linewidth=0.6) +
