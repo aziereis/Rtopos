@@ -21,6 +21,9 @@
 #' @param marksize size of the electrode markers. Defaults to 1.1
 #' @param textsize size of the text capture
 #' @param textfamily if specified, the package "extrafont" needs to be installed and loaded.
+#' @param customlayout use a different electrode layout. needs to be a dataframe including the columns "channel", "x", "y", other columns are optional 
+#' @param rotatelayoutdegree if not 0, will rotate the data (not the head) to a degree speficied (e.g., 90 ). Be careful! Usually only used when non-standard layouts are chosen
+#' @param ears if TRUE, ears will be added to the head
 #' @keywords topo
 #' @export
 #' @examples
@@ -52,7 +55,10 @@ maketopoplot<-function(
     plottitle='',
     marksize = 1.1,
     textsize = 10,
-    textfamily = NULL){
+    textfamily = NULL,
+    customlayout = NULL, 
+    rotatelayoutdegree = 0, 
+    ears = F){
   #Diverging
   #BrBG, PiYG, PRGn, PuOr, RdBu, RdGy, RdYlBu, RdYlGn, Spectral
 
@@ -79,6 +85,7 @@ maketopoplot<-function(
   # textfamily ="Arial"
   #load packages that are needed
 
+  require(magrittr)
   akimaversion = as.character(packageVersion("akima"))
   if(method =="akima" & akimaversion !="0.6.2.1"){
     warning("akima version 0.6.2.1 needed, but version ",akimaversion, " is provided. ")
@@ -110,7 +117,34 @@ maketopoplot<-function(
 
   originalconditionlevels<-conditionlevels #store the original conditions (later there will be new ones added (e.g. comparisonplots))
 
-
+  scale_to_01 <- function(x) {
+    (x - min(x)) / (max(x) - min(x))
+  }
+  
+  # Function to rotate (x, y) around the center (centroid of the points) by angle theta
+  rotate_around_centroid <- function(dat, rotatelayoutdegree) {
+    theta = rotatelayoutdegree * pi / 180
+    # Step 1: Calculate the centroid (center of the data)
+    x_center <- mean(dat[,"x"])
+    y_center <- mean(dat[,"y"])
+    
+    # Step 2: Translate the points so that the centroid becomes the origin
+    x_translated <- dat[,"x"] - x_center
+    y_translated <- dat[,"y"] - y_center
+    
+    # Step 3: Apply the rotation matrix
+    x_rot <- x_translated * cos(theta) - y_translated * sin(theta)
+    y_rot <- x_translated * sin(theta) + y_translated * cos(theta)
+    
+    # Step 4: Translate back
+    x_rot <- x_rot + x_center
+    y_rot <- y_rot + y_center
+    
+    dat[,"x"] = x_rot
+    dat[,"y"] = y_rot
+    
+    return(dat)
+  }
   abbrvlabel<-function(x){
     x = as.character(x)
     if (nchar(x) <= 7){
@@ -140,10 +174,30 @@ maketopoplot<-function(
   }
 
   # check electrode number
-
+  #Load electrode locations
+  if (class(customlayout)!="NULL"){
+    # check whether all necessary information is there (x,y,z coordinate and channel label)
+    names(customlayout)<-tolower(names(customlayout))
+    customlayout$channel<-tolower(customlayout$channel)
+    # Function to scale columns to [0, 1]
+    
+    
+    # Apply the function to each column
+    colsinxyz = names(customlayout)[names(customlayout)%in%c("x", "y", "z")]
+    customlayout[,colsinxyz ] <- as.data.frame(lapply(customlayout[,colsinxyz], scale_to_01))
+    electrodelocs = customlayout
+    #now load and aggregate data
+    electrodechanlist<-electrodelocs$channel
+    chansincluded = names(dataset)[names(dataset)%in% electrodechanlist]
+    
+    warning("You selected a custom layout: Check once with printing the electrode labels to see whether the results make sense
+          (or use different channel layout, rotate layout or similar...).")
+    nrchans = length(electrodelocs$channel)
+    
+  }
 
   #Load electrode locations
-  if (nrchans == 64){
+  if (nrchans == 64 & class(customlayout)=="NULL"){
     #electrodelocs<-read.delim("ElectrodeLocation64_fieldtrip.txt", header=F, sep=" ")
     electrodelocs<-Rtopos::electrodelocs64
     electrodelocs[,c(1,5)]<-NULL
@@ -160,9 +214,8 @@ maketopoplot<-function(
     if(length(chansincluded) <64){
       warning("number of electrodes provided in dataset matching the 64 extended 10-20 set layout is smaller than 64. Check whether the results make sense (or use different channel layout).")
     }
-    dat<-tidyr::pivot_longer(dataset, cols=tidyr::matches(electrodechanlist), names_to="channel", values_to="signal") #convert to long format
-  }
-  if (nrchans == 128){
+     }
+  if (nrchans == 128 & class(customlayout)=="NULL"){
     electrodelocs<-Rtopos::electrodelocs128#read.delim("ElectrodeLocation128_fieldtrip.txt", header=F, sep=" ")
     electrodelocs[,c(1,5)]<-NULL
     names(electrodelocs)<-c("x", "y", "z","channel")
@@ -181,17 +234,22 @@ maketopoplot<-function(
     if(length(chansincluded) <128){
       warning("number of electrodes provided matching the 128 ABCD layout in dataset is smaller than 128. Check whether the results make sense (or use different channel layout).")
     }
-    dat<-tidyr::pivot_longer(dataset, cols=matches(electrodechanlist), names_to="channel", values_to="signal") #convert to long format
-
+    
   }
 
-
+  dat<-tidyr::pivot_longer(dataset, cols=matches(electrodechanlist), names_to="channel", values_to="signal") #convert to long format
+  
   # if I should only plot one condition and one level of that condition (e.g. emotion - happy)
   # then it doesn't make sense to do any difference plots
   if(length(conditionlevels)==1){
     differenceplots=F}
 
-
+  # does the layout needs to be rotated, so that FPz is up and towards the nose?
+  if(rotatelayoutdegree!=0){
+    # Function to rotate (x, y) around the center (centroid of the points) by angle theta
+    electrodelocs<-rotate_around_centroid(electrodelocs, rotatelayoutdegree)
+  }
+  
   dat<-as.data.frame(dat) #make a dataframe out of it (there were some compatibility problems if it stays a tibble)
 
   #only select those conditions to analyse
@@ -416,6 +474,14 @@ maketopoplot<-function(
       # draw the nose (haven't drawn ears yet)
       ggplot2::geom_line(data = data.frame(x = c(0.45, 0.5, 0.55), y = c(1.0, 1.05, 1.0)),
                          ggplot2::aes(x, y, z = NULL), linewidth=0.6) +
+      # add ears
+      {if (ears) ggplot2::geom_curve(data = data.frame(x = 0.01, y = 0.4),
+                            ggplot2::aes(x=x, y=y, z = NULL, xend = x, yend = y + 0.2),
+                            curvature = -0.5, linewidth=0.6)  }+
+      {if (ears) ggplot2::geom_curve(data = data.frame(x = 0.99, y = 0.4),
+                            ggplot2::aes(x=x, y=y, z = NULL, xend = x, yend = y + 0.2),
+                            curvature = 0.5, linewidth=0.6)  }+
+      
       # add points for the electrodes
       {if (quick)ggplot2::geom_point(data = dat, ggplot2::aes(x, y, z = NULL, fill = NULL),
                             shape = 21, colour = 'black', size = 0.5) }+
