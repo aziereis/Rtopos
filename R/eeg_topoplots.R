@@ -63,8 +63,10 @@ maketopoplot<-function(
   #BrBG, PiYG, PRGn, PuOr, RdBu, RdGy, RdYlBu, RdYlGn, Spectral
 
   ##todebug
-  # dataset=as.data.frame(xdat)
+  # dataset=as.data.frame(Rtopos::xdat)
+  # dataset$condition = dataset$difficulty
   # condition="difficulty"
+  # condition="condition"
   # conditionlevels=levels(as.factor(dataset[,condition]))
   # differenceplots = T
   # differencelevel = "all"
@@ -83,6 +85,9 @@ maketopoplot<-function(
   # textsize = 10
   # method = "MBA"
   # textfamily ="Arial"
+  # customlayout=NULL
+  # rotatelayoutdegree = 0
+  # ears=T
   #load packages that are needed
 
   require(magrittr)
@@ -97,6 +102,13 @@ maketopoplot<-function(
 
   limsignals = T
   dataset<-as.data.frame(dataset)
+  #fix weird error if condition is actually named "condition
+  if(condition == "condition"){
+    dataset$cond_variable = dataset$condition #rename for convenience
+    dataset$condition<-NULL
+    condition = "cond_variable"
+    
+  }
   #check conditions to plot
   if(length(condition)==0){
     condition = "nocondition"
